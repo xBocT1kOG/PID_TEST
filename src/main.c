@@ -30,9 +30,10 @@
 
 #define KP              0.04f
 #define KI              0.0025f
-#define KD              0.0f
+#define KD              0.002f
 
 #define RPM_FILTER_ALPHA 0.25f
+#define RATE_FILTER_ALPHA 0.25f
 
 static volatile uint32_t tach_pulses = 0;
 
@@ -215,10 +216,6 @@ void app_main(void)
 
     float target_rpm = 1800.0f;
 
-    float previous_rpm = 0.0f;
-
-    bool first_measurement = true;
-
     int cycles = 0;
 
 
@@ -228,6 +225,9 @@ void app_main(void)
     bool rpm_filter_initialized = false;
     float previous_filtered_rpm = 0.0f;
     bool first_rate_measurement = true;
+    bool first_measurement = true;
+    float filtered_rpm_rate = 0.0f;
+    bool rate_filter_initialized = false;
 
 
     while (1)
@@ -239,7 +239,7 @@ void app_main(void)
         // Меняем TARGET для нашего эксперимента
         // =============================================
 
-        if (cycles == 30)
+        if (cycles == 60)
         {
             target_rpm = 2500.0f;
 
@@ -250,7 +250,7 @@ void app_main(void)
         }
 
 
-        if (cycles == 70)
+        if (cycles == 120)
         {
             target_rpm = 1800.0f;
 
@@ -301,10 +301,28 @@ void app_main(void)
 
         float rpm_rate = 0.0f;
 
-        if (!first_measurement)
+        if (!first_rate_measurement)
         {
             rpm_rate =
                 (filtered_rpm - previous_filtered_rpm) / dt;
+                // Фильтруем "акселерометр"
+            if (!rate_filter_initialized)
+            {
+                filtered_rpm_rate = rpm_rate;
+                rate_filter_initialized = true;
+            }
+            else
+            {
+                filtered_rpm_rate =
+                    RATE_FILTER_ALPHA * rpm_rate
+                    + (1.0f - RATE_FILTER_ALPHA) * filtered_rpm_rate;
+            }
+        filtered_rpm_rate = rpm_rate;
+        rate_filter_initialized = true;
+        }
+        else
+        {
+            first_rate_measurement = false;
         }
 
         previous_filtered_rpm = filtered_rpm;
@@ -329,33 +347,7 @@ void app_main(void)
         // 4. D
         // =============================================
 
-        float derivative = 0.0f;
-
-
-        if (!first_measurement)
-        {
-            // Считаем D по изменению RPM,
-            // а не по изменению error.
-            //
-            // Минус нужен потому что:
-            //
-            // RPM растут -> D отрицательная
-            // RPM падают -> D положительная
-
-            derivative =
-                -(filtered_rpm - previous_rpm) / dt;
-        }
-        else
-        {
-            first_measurement = false;
-        }
-
-
-        previous_rpm = filtered_rpm;
-
-
-        float D =
-            KD * derivative;
+        float D = -KD * rpm_rate;
 
 
         // =============================================
@@ -458,14 +450,17 @@ void app_main(void)
         ESP_LOGI(
             "PID",
             "Target: %.0f | Raw: %.0f | Filtered: %.0f | "
-            "dRPM/dt: %.0f | Err: %.0f | P: %.2f | I: %.2f | Power: %.1f%%",
+            "dRPM/dt: %.0f | Filt dRPM/dt: %.0f | "
+            "Err: %.0f | P: %.2f | I: %.2f | D: %.2f | Power: %.1f%%",
             target_rpm,
             rpm,
             filtered_rpm,
             rpm_rate,
+            filtered_rpm_rate,
             error,
             P,
             I,
+            D,
             fan_power
         );
     }
