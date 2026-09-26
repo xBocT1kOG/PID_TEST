@@ -29,11 +29,11 @@
 #define BASE_POWER 40.0f
 
 #define KP              0.04f
-#define KI              0.0025f
-#define KD              0.002f
+#define KI              0.003f
+#define KD              0.003f
 
 #define RPM_FILTER_ALPHA 0.25f
-#define RATE_FILTER_ALPHA 0.25f
+#define RATE_FILTER_ALPHA 0.35f
 
 static volatile uint32_t tach_pulses = 0;
 
@@ -225,7 +225,6 @@ void app_main(void)
     bool rpm_filter_initialized = false;
     float previous_filtered_rpm = 0.0f;
     bool first_rate_measurement = true;
-    bool first_measurement = true;
     float filtered_rpm_rate = 0.0f;
     bool rate_filter_initialized = false;
 
@@ -239,7 +238,7 @@ void app_main(void)
         // Меняем TARGET для нашего эксперимента
         // =============================================
 
-        if (cycles == 60)
+        if (cycles == 40)
         {
             target_rpm = 2500.0f;
 
@@ -250,7 +249,7 @@ void app_main(void)
         }
 
 
-        if (cycles == 120)
+        if (cycles == 100)
         {
             target_rpm = 1800.0f;
 
@@ -305,28 +304,26 @@ void app_main(void)
         {
             rpm_rate =
                 (filtered_rpm - previous_filtered_rpm) / dt;
-                // Фильтруем "акселерометр"
-            if (!rate_filter_initialized)
-            {
-                filtered_rpm_rate = rpm_rate;
-                rate_filter_initialized = true;
-            }
-            else
-            {
-                filtered_rpm_rate =
-                    RATE_FILTER_ALPHA * rpm_rate
-                    + (1.0f - RATE_FILTER_ALPHA) * filtered_rpm_rate;
-            }
-        filtered_rpm_rate = rpm_rate;
-        rate_filter_initialized = true;
+
+    // Фильтруем "акселерометр"
+        if (!rate_filter_initialized)
+        {
+            filtered_rpm_rate = rpm_rate;
+            rate_filter_initialized = true;
         }
         else
         {
-            first_rate_measurement = false;
-        }
+            filtered_rpm_rate =
+            RATE_FILTER_ALPHA * rpm_rate
+            + (1.0f - RATE_FILTER_ALPHA) * filtered_rpm_rate;
+    }
+}
+else
+{
+    first_rate_measurement = false;
+}
 
-        previous_filtered_rpm = filtered_rpm;
-        first_measurement = false;
+previous_filtered_rpm = filtered_rpm;
         // =============================================
         // 2. ERROR
         // =============================================
@@ -347,7 +344,7 @@ void app_main(void)
         // 4. D
         // =============================================
 
-        float D = -KD * rpm_rate;
+        float D = -KD * filtered_rpm_rate;
 
 
         // =============================================
