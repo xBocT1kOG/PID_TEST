@@ -1,6 +1,2 @@
-# This file was automatically generated for projects
-# without default 'CMakeLists.txt' file.
-
-FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/src/*.*)
-
-idf_component_register(SRCS ${app_sources})
+# Declare the application source and its GPIO / LEDC driver dependency.
+idf_component_register(SRCS "main.c" PRIV_REQUIRES driver)
