@@ -35,6 +35,8 @@
 #define RPM_FILTER_ALPHA 0.25f
 #define RATE_FILTER_ALPHA 0.35f
 
+#define CSV_LOGGING 1
+
 static volatile uint32_t tach_pulses = 0;
 
 static const char *TAG = "FAN";
@@ -147,14 +149,6 @@ static void fan_set_percent(uint8_t percent)
             PWM_CHANNEL
         )
     );
-
-
-    ESP_LOGI(
-        TAG,
-        "Fan PWM: %d%% (duty=%lu)",
-        percent,
-        duty
-    );
 }
 
 static void tach_init(void)
@@ -187,9 +181,6 @@ static void tach_init(void)
             NULL
         )
     );
-
-    ESP_LOGI(TAG, "TACH initialized on GPIO %d",
-             FAN_TACH_GPIO);
 }
 
 // ============================================================
@@ -228,6 +219,12 @@ void app_main(void)
     float filtered_rpm_rate = 0.0f;
     bool rate_filter_initialized = false;
 
+    #if CSV_LOGGING
+    printf(
+    "time_ms,target_rpm,raw_rpm,filtered_rpm,"
+    "rpm_rate,filtered_rate,error,p,i,d,power\n"
+    );
+    #endif
 
     while (1)
     {
@@ -238,25 +235,16 @@ void app_main(void)
         // Меняем TARGET для нашего эксперимента
         // =============================================
 
-        if (cycles == 40)
+        if (cycles == 60)
         {
             target_rpm = 2500.0f;
 
-            ESP_LOGW(
-                "PID",
-                "TARGET CHANGED TO 2500 RPM"
-            );
         }
 
 
-        if (cycles == 100)
+        if (cycles == 120)
         {
             target_rpm = 1800.0f;
-
-            ESP_LOGW(
-                "PID",
-                "TARGET CHANGED TO 1800 RPM"
-            );
 
             cycles = 0;
         }
@@ -443,13 +431,29 @@ previous_filtered_rpm = filtered_rpm;
         // =============================================
         // 9. LOG
         // =============================================
-
-        ESP_LOGI(
-            "PID",
-            "Target: %.0f | Raw: %.0f | Filtered: %.0f | "
-            "dRPM/dt: %.0f | Filt dRPM/dt: %.0f | "
-            "Err: %.0f | P: %.2f | I: %.2f | D: %.2f | Power: %.1f%%",
-            target_rpm,
+        #if CSV_LOGGING
+            printf(
+                "%lu,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,"
+                "%.3f,%.3f,%.3f,%.2f\n",
+                (unsigned long)esp_log_timestamp(),
+                target_rpm,
+                rpm,
+                filtered_rpm,
+                rpm_rate,
+                filtered_rpm_rate,
+                error,
+                P,
+                I,
+                D,
+                fan_power
+            );
+        #else
+            ESP_LOGI(
+                "PID",
+                "Target: %.0f | Raw: %.0f | Filtered: %.0f | "
+                "dRPM/dt: %.0f | Filt dRPM/dt: %.0f | "
+                "Err: %.0f | P: %.2f | I: %.2f | D: %.2f | Power: %.1f%%",
+                target_rpm,
             rpm,
             filtered_rpm,
             rpm_rate,
@@ -459,6 +463,7 @@ previous_filtered_rpm = filtered_rpm;
             I,
             D,
             fan_power
-        );
+            );
+        #endif
     }
 }
